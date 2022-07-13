@@ -1,0 +1,38 @@
+# Fail if the vagrant-disksize plugin is not installed
+unless Vagrant.has_plugin?("vagrant-disksize")
+    raise 'vagrant-disksize is not installed!'
+  end
+
+Vagrant.configure("2") do |config|
+    config.vm.hostname = "server76"
+    config.vm.box = "centos/8"
+    config.vm.network "public_network", ip: "192.168.1.76", bridge: 'eno1'
+    config.disksize.size = "150GB"
+    config.vm.provider "virtualbox" do |vb|
+      vb.gui = false
+      vb.name = "Centos8"
+      vb.memory = 65000
+      vb.cpus = 16
+    end     
+    config.vm.define :"CentosVM" do |t|
+    end
+    config.vm.provision "shell", run: "always", inline: <<-SHELL
+         sudo cd /etc/yum.repos.d/
+         sudo sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
+         sudo sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
+         sudo yum update -y
+         sudo yum -y install wget net-tools firewalld 
+         sudo route add default gw 192.168.1.1
+         sudo sed -i 's|PasswordAuthentication no|PasswordAuthentication yes|g' /etc/ssh/sshd_config
+         sudo systemctl restart sshd
+         sudo echo 'vagrant:Virtual-12#' | sudo chpasswd
+         # Install docker
+         curl -fsSL https://get.docker.com/ | sh
+         sudo systemctl start docker
+         sudo systemctl enable docker
+         sudo usermod -aG docker $USER
+         sudo ps -ef | grep dockerd
+      SHELL
+    # Run a script on provisioning the box to format the file system
+    config.vm.provision "shell", path: "disk-centos.sh", keep_color: "true"
+  end
